@@ -1496,15 +1496,14 @@ return (function () {
             return true;
         }
 
-        function processInputValue(values, errors, elt) {
-            if (elt == null) {
+        function processInputValue(processed, values, errors, elt) {
+            if (elt == null || haveSeenNode(processed, elt)) {
                 return;
+            } else {
+                processed.push(elt);
             }
             if (shouldInclude(elt)) {
                 var name = getRawAttribute(elt,"name");
-                if (name in values) {
-                    return;
-                }
                 var value = elt.value;
                 if (elt.multiple) {
                     value = toArray(elt.querySelectorAll("option:checked")).map(function (e) { return e.value });
@@ -1540,7 +1539,7 @@ return (function () {
             if (matches(elt, 'form')) {
                 var inputs = elt.elements;
                 forEach(inputs, function(input) {
-                    processInputValue(values, errors, input);
+                    processInputValue(processed, values, errors, input);
                 });
             }
         }
@@ -1556,28 +1555,35 @@ return (function () {
         }
 
         function getInputValues(elt, verb) {
-            var values = {};
+            var processed = [];
+            var values = {
+                form: {},
+                element: {},
+                includes: {},
+            };
             var errors = [];
 
             // for a non-GET include the closest form
             if (verb !== 'get') {
-                processInputValue(values, errors, closest(elt, 'form'));
+                processInputValue(processed, values.form, errors, closest(elt, 'form'));
             }
 
             // include the element itself
-            processInputValue(values, errors, elt);
+            processInputValue(processed, values.element, errors, elt);
 
             // include any explicit includes
             var includes = getClosestAttributeValue(elt, "hx-include");
             if (includes) {
                 var nodes = getDocument().querySelectorAll(includes);
                 forEach(nodes, function(node) {
-                    processInputValue(values, errors, node);
+                    processInputValue(processed, values.includes, errors, node);
                 });
             }
 
+            var mergedValues = mergeObjects(values.includes, values.element);
+            mergedValues = mergeObjects(mergedValues, values.form);
 
-            return {errors:errors, values:values};
+            return {errors:errors, values:mergedValues};
         }
 
         function appendParam(returnStr, name, realValue) {
